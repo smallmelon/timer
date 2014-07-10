@@ -9,6 +9,9 @@ TVN_SIZE=1<<TVN_BITS
 TVR_SIZE=1<<TVR_BITS
 TVR_MASK=(TVR_SIZE - 1)
 TVN_MASK=(TVN_SIZE - 1)
+MASK14=(1<<(TVR_BITS+TVN_BITS*1)) - 1
+MASK20=(1<<(TVR_BITS+TVN_BITS*2)) - 1 
+MASK26=(1<<(TVR_BITS+TVN_BITS*3)) - 1
 
 
 if 'giKey' not in globals():
@@ -37,12 +40,13 @@ class cTimerVec(object):
 		dVec=self.lVec[idx]
 		dVec.pop(iKey,None)
 
-	def _runTimer(self,idx):#实际上只有一个定时器会调用这个函数
-		self.iIdx=idx
+	def _runTimer(self,idx):#实际上只有一个定时器会调用这个函数t 
+		self.iIdx
 		dVec=self.lVec[idx]
 		for (expires,func,tArg,kArg) in dVec.itervalues():
 			func(*tArg,**kArg)#运行函数
 		self.lVec[idx]={}
+		self.idx=(self.iIdx+1)&(self.size-1)
 
 	def move(self):
 		dVec=self.lVec[self.iIdx]
@@ -53,29 +57,34 @@ class cTimerVec(object):
 
 class cTimerRoot(object):
 	def __init__(self):
-		self.tv1=cTimerVec(TVR_BITS)
-		self.tv2=cTimerVec(TVN_BITS)
-		self.tv3=cTimerVec(TVN_BITS)
-		self.tv4=cTimerVec(TVN_BITS)
-		self.tv5=cTimerVec(TVN_BITS)
+		self.tv1=cTimerVec(TVR_SIZE)
+		self.tv2=cTimerVec(TVN_SIZE)
+		self.tv3=cTimerVec(TVN_SIZE)
+		self.tv4=cTimerVec(TVN_SIZE)
+		self.tv5=cTimerVec(TVN_SIZE)
 		self.jiffies=int(time.time())#单位s,或者在start的时候初始化
-
+		gevent.spawn(self.__runTimer)
 
 	def cascadeTimers(self,expires):
+		print 'tv2  %x' % (expires&TVR_MASK)
 		if expires&TVR_MASK==0:#tv2
+			print 'tv2'
 			dVec=self.tv2.move()
 			for iKey,(expires,func,tArg,kArg) in dVec.iteritems():
 				self.addTimer2(iKey,expires,func,tArg,kArg)#重新加入
-		if expires&(1<<TVR_BITS+TVN_BITS*1)==0:#tv3
+		print 'tv3  %x' % (expires&MASK14)
+		if expires&MASK14==0:#tv3	
 			dVec=self.tv3.move()
 			for iKey,(expires,func,tArg,kArg) in dVec.iteritems():
 				self.addTimer2(iKey,expires,func,tArg,kArg)
-		if expires&(1<<TVR_BITS+TVN_BITS*2)==0:#tv4
+		print 'tv4 %x' % (expires&MASK20)
+		if expires&MASK20==0:#tv4
 			dVec=self.tv4.move()
 			for iKey,(expires,func,tArg,kArg) in dVec.iteritems():
 				self.addTimer2(iKey,expires,func,tArg,kArg)
-		if expires&(1<<TVR_BITS+TVN_BITS*3)==0:#tv5
-			dVec=self.tv4.move()
+		print 'tv5 %x' % (expires&MASK26)
+		if expires&MASK26==0:#tv5
+			dVec=self.tv5.move()
 			for iKey,(expires,func,tArg,kArg) in dVec.iteritems():
 				self.addTimer2(iKey,expires,func,tArg,kArg)
 
@@ -103,9 +112,10 @@ class cTimerRoot(object):
 		oTimer,idx=self.findTimer(expires)
 		if not oTimer:
 			raise Exception,'expires:{} is past time'.format(expires)
+		'addTimer',idx
 		return oTimer.addTimer(idx,expires,func,*tArg,**kArg)
 	
-	def addTimer(self,iKey,expires,func,*tArg,**kArg):#重新加入
+	def addTimer2(self,iKey,expires,func,*tArg,**kArg):#重新加入
 		oTimer,idx=self.findTimer(expires)
 		if not oTimer:
 			raise Exception,'expires:{} is past time'.format(expires)
@@ -119,11 +129,32 @@ class cTimerRoot(object):
 		oTimer.removeTimer(idx,iKey)
 
 	def __runTimer(self):
-		expires=int(time.time())
-		idx=expires-self.jiffies
-		if idx > 2:#相差应该在1s内的，超出应该就是出错了
-			raise Exception,'now:{},rum timer have error,time interval more than 2 seconds'.format(expires)		
-		i=expires&TVR_MASK
-		self.tv1._runTimer(i)
-		self.cascadeTimers(expires)#刷新一下咯
+		while True:
+			gevent.sleep(1)#定时1s
+			expires=int(time.time())
+			idx=expires-self.jiffies
+			if idx > 2:#相差应该在1s内的，超出应该就是出错了
+				raise Exception,'now:{},rum timer have error,time interval more than 2 seconds'.format(expires)		
+			i=expires&TVR_MASK
+			self.tv1._runTimer(i)
+			self.cascadeTimers(expires)#刷新一下咯
+			self.jiffies=expires
+
+def test(s,t):
+	print 'time:{},expires:{}'.format(t-s,s)
+
+import sys
+import time
+if __name__ == '__main__':
+	oTimer=cTimerRoot()
+	end=int(sys.argv[1])
+	expires=int(time.time())
+	for i in xrange(1,end,1):
+		oTimer.addTimer(expires+i,test,expires,expires+i)
+		#oTimer.addTimer(expires+i,test,expires,expires+i+1)
+		#oTimer.addTimer(expires+i,test,expires,expires+i+2)
+		#oTimer.addTimer(expires+i,test,expires,expires+i+3)
+	gevent.wait()
+
+
 
