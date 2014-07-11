@@ -136,14 +136,14 @@ class cTimerRoot(object):
 	def __runTimer(self):
 		expires=int(time.time())
 		while True:
-			gevent.sleep(0.001)#调试刷快1000速度
 			#expires=int(time.time())
-			expires=expires+1
 			idx=expires-self.jiffies
 			if idx > 2:#相差应该在1s内的，超出应该就是出错了
 				raise Exception,'now:{},rum timer have error,time interval more than 2 seconds'.format(expires)		
 			self.cascadeTimers(expires)#刷新一下咯
 			self.tv1._runTimer(indexTv1(expires))
+			gevent.sleep(0.001)#调试刷快1000速度
+			expires=expires+1
 			self.jiffies=expires
 
 def test(s,t):
