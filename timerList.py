@@ -26,8 +26,6 @@ def indexTv5(expires):
 	return (expires>>TVR_BITS + TVN_BITS*3)&TVN_MASK
 
 
-
-
 if 'giKey' not in globals():
 	giKey=0
 
@@ -141,13 +139,14 @@ class cTimerRoot(object):
 			if idx > 2:#相差应该在1s内的，超出应该就是出错了
 				raise Exception,'now:{},rum timer have error,time interval more than 2 seconds'.format(expires)		
 			self.cascadeTimers(expires)#刷新一下咯
+			print 'now',expires
 			self.tv1._runTimer(indexTv1(expires))
 			gevent.sleep(0.001)#调试刷快1000速度
 			expires=expires+1
 			self.jiffies=expires
 
 def test(s,t):
-	print 'time:{}'.format(t-s,s)
+	print 'time:{},test:{}'.format(t-s,t)
 
 import sys
 import time
@@ -160,12 +159,4 @@ if __name__ == '__main__':
 		#oTimer.addTimer(expires+i,test,expires,expires+i+1)
 		#oTimer.addTimer(expires+i,test,expires,expires+i+2)
 		#oTimer.addTimer(expires+i,test,expires,expires+i+3)
-	#print oTimer.tv1.lVec
-	#print oTimer.tv2.lVec
-	#print oTimer.tv3.lVec
-	#print oTimer.tv4.lVec
-	#print oTimer.tv5.lVec
 	gevent.wait()
-
-
-
